@@ -18,31 +18,36 @@
 \maketitle
 
 \begin{abstract}
-This paper describes some of the techniques used to identify the behavior of the Linux page replacement and discusses the implementation of a system call that provides page replacement statistics.  The system call provides page fault statistics for minor and major faults for a single process, processes grouped by owners, and all processes on the system. Several tests were developed that accessed large segments of memory on a Linux virtual machine. In each of the tests, access patterns exploited some page replacement scheme and favored others. An initial hypothesis of a Least Recently Used (LRU) algorithm was partially supported, although there was some evidence that the Linux implementation has characteristics resembling a working set. 
+This paper describes some of the techniques used to identify the behavior of the Linux page replacement and discusses the implementation of a system call that provides page replacement statistics.  The system call provides page fault statistics for minor and major faults for a single process, processes grouped by owners, and all processes on the system. Several tests were developed that accessed large segments of memory on a Linux virtual machine. In each of the tests, access patterns exploited specific page replacement schemes and favored others. An initial hypothesis of a Least Recently Used (LRU) algorithm was partially supported, although there was some evidence that the Linux implementation is a combination of various algorithms and has some characteristics resembling a working set. 
 \end{abstract}
 
 \section{Introduction}
 
-We began with a hypothesis that the Linux system uses a Least Recently Used (LRU) page replacement algorithm, based on our analysis of the relevant kernel code and our numerous attempts in class to approximate this algorithm.  Our first few tests confirmed that the replacement policy is more like LRU than like Most Recently Used (MRU) or First In First Out (FIFO), but our test to find some distinction between LRU and a Working Set (WS) algorithm did lean in favor of some Working Set behavior rather than strict LRU. 
+We began with a hypothesis that the Linux system uses a Least Recently Used (LRU) page replacement algorithm, based on our analysis of the relevant kernel code and our numerous attempts in class to approximate this algorithm.  Our first few tests confirmed that the replacement policy is more like LRU than like Most Recently Used (MRU) and First In First Out (FIFO), but our test to find some distinction between LRU and a Working Set (WS) algorithm did lean in favor of some Working Set behavior rather than strict LRU. It is evident that the Linux page replacement implementation is not strictly one of the algorithms outline in class, but rather exhibits characteristics of both WS and LRU.
 
 
 \section{System Call}
 Our experimental methodology relies heavily on the page fault statistics system call that we implemented for the first part of this lab. The system call reports the number of page faults for all processes in the system, all the processes being run by the owner of the current process, or just the page faults for the current process. For each of these operations, the system call reports the major faults, minor faults, and the number of processes being reported on. We collected statistics primarily on major faults, as they are the page faults that result from having to replace pages in memory. 
 
-The system call first does all the normal error checking, ensuring that the pointer passed in is writable and valid, that the process or processes requested exist, and that the flag is valid. We defined the ${\tt pf\_info\_struct()}$ 
-and the included flags in a header file.  If the user enters a pid of -1, we used the ${\tt for\_each\_process()}$ macro to loop over all the processes, incrementing the major faults, minor faults, and number of processes for each one. We then fill the fields of the included struct. If the pid is positive, we check the inputted flag. If the flag is ${\tt PGFLTSTAT\_PROC}$, we do the same procedure for just the current process. If the flag is ${\tt PGFLTSTAT\_OWNER}$, we look for the owner id of the current process, and loop through all the processes again, collecting data only for the ones that share the uid. 
+The system call first does normal error checking, ensuring that the pointer passed in is writable and valid, that the process or processes requested exist, and that the flag is valid. We defined the ${\tt pf\_info\_struct}$, which stores the  major faults, minor faults, and the number of associated processes, and the included flags in a header file. If the user enters a pid of -1, we used the ${\tt for\_each\_process()}$ macro to loop over all the processes, incrementing the major faults, minor faults, and number of processes for each one. We then fill the fields of the included struct. If the pid is positive, we check the inputted flag. If the flag is ${\tt PGFLTSTAT\_PROC}$, we do the same procedure for just the current process. If the flag is ${\tt PGFLTSTAT\_OWNER}$, we look for the owner id of the current process, and loop through all the processes again, collecting data only for the ones that share the uid. Once completed, this information is written to the provided ${\tt pf\_info\_struct}$. 
 
 \section{Methodology}
 \subsection{Experiments}
 
-We carried out four experiments, all contained as subroutines within one file ({\tt mem.c}). The program selects one of the subroutines from a command line argument. In every test, the Virtual Machine was configured to have $256$MB of physical memory and $128$ buckets of unsigned ints (4B) were allocated. Thus each bucket had 4MB of data contained with it. Depending on the availability of memory after the boot, the system could hold slightly less than 64 of these buckets. We used this fact to plan some of our tests. 
+We carried out four experiments, all contained as subroutines within one file ({\tt mem.c}). The program selects one of the subroutines from a command line argument. In every test, the Virtual Machine was configured to have $256$MB of physical memory and $128$ buckets of unsigned ints (4B) were allocated. Thus each bucket had 4MB of data contained with it. Depending on the availability of memory after the boot, the system could hold slightly less than 64 of these buckets. We used this fact to plan some of our tests and memory access patterns. 
 
 Each test (except the random LRU test) involves two cases. In either case for a specific test, the system does roughly the same allocation routine with a slightly different final phase. In these last phases, we attempted to exploit some characteristic of the page replacement algorithm. In one case, we would access memory that we predicted would be replaced by the algorithm, and in the other case, we would access memory that we guessed had not been replaced. By printing out major fault statistics between the phases, we could get an idea of whether our hypothesis was correct or not by calculating the average page faults for each phase.  We report this average over the number of trials and include the standard deviation as a measure of the error. 
 
 \subsubsection{Ruling Out Most Recently Used}
+As discussed in class, the Most Recently Used (MRU) strategy is often a poor choice for a page replacement algorithm. Since there are only a few application specific cases in which this algorithm works well and Linux handles such a diverse workload, we hypothesize that MRU is not used as Linux's page replacement policy.
+
+We test this hypothesis by running each case of the first experiment in file {\tt mem.c}. In both cases, this subroutine first writes 128 4MB buckets to a block of memory, which is significantly larger than what can fit in RAM. We now access a small chunk (8-12 buckets) of this large block in one of two ways. In the first case, we read in the last 12 buckets. Were the Linux page replacement policy a MRU algorithm, we would expect these memory accesses to cause major page faults as recently-used page entries would be evicted once the page table filled up. On the other hand, were the page replacement policy strictly LRU, we would expect these entries to still be within the page table and minimal major page faulting. As seen in Figure 1 and Table 1, this experiment resulted in very few major page faults, supporting our hypothesis that MRU is not used as Linux's page replacement policy.
+
+In the second case, we read in the first 8 buckets of the large block of memory. Were the Linux page replacement policy a MRU algorithm, we would expect these memory accesses to cause very few major page faults as these least recently-used page entries would be less likely to be evicted than their recent counterparts. Conversely, were Linux page replacement policy a LRU algorithm we would expect major page faults to occur as these least recently-used entries would have been evicted once the page table filled up. The number of major page faults that occurred in this case, as depicted in Figure 1 and Table 1, were nearly an order of magnitude greater than those that occurred in the first case, further supporting our initial hypotheses. Not only does this experiment refute the possibility that Linux implements a MRU page replacement algorithm, but the displayed behavior implies an LRU implementation.  
+
 %--------------------------------------------%
 
-\begin{figure}[h]
+\begin{figure}[h!]
 \begin{tikzpicture}
 \begin{axis}[
     title = {MRU vs. LRU Test},
@@ -86,7 +91,7 @@ x   y           error    label
 \end{tikzpicture}
 \end{figure}
 
-\begin{table}[h]
+\begin{table}[h!]
 \begin{center}
 \begin{tabular}{|c|c|r|r|}
 \hline
@@ -107,6 +112,10 @@ x   y           error    label
 %--------------------------------------------%
 
 \subsubsection{Ruling Out First In First Out}
+Given that First In First Out (FIFO) page replacement policies do not take into account memory usage information and results in Bélády's anomaly, we hypothesize that Linux does not make us of a FIFO based algorithm. We confirm this hypothesis by running the second subroutine in our experiment file. In both cases of this experiment, the application first writes 128 4MB buckets to a block of memory and then repeatably reads and writes to the first 8 buckets. Next, the application writes to the last 8 buckets once, effectively removing the first 8 buckets if Linux utilizes a FIFO algorithm. In the first case, this subroutine then reads the first 8 buckets. Were the Linux page replacement policy a FIFO algorithm, we would expect these read operations to major page fault, as they were the first entries related to this memory block to be added to the page table and would have been removed after the last write. On the other hand, if it is an LRU implementation we would expect minimal page faults to occur as this memory was recently accessed. As seen in Figure 2 and Table 2, no major page faults occurred, supporting our hypothesis and further strengthening our claim that Linux implements an LRU page replacement algorithm.
+
+In the second case, the last phase of this application reads buckets 8-16. We would expect a FIFO algorithm not to page fault when performing these operations, as these buckets would not yet have been evicted from the page table. In reality, these operations resulted in nearly 1000 major page faults. This case also implies that the Linux page replacement algorithm is not a FIFO based algorithm. 
+ 
 %--------------------------------------------%
 \begin{figure}[h]
 \begin{tikzpicture}
@@ -165,13 +174,13 @@ x   y           error    label
 1 & 1 & 7708.00 & $\pm$ 158.27 \\
 & 2 & 6832.00 & $\pm$ 128.12 \\
 \hline
-1& 1 & 976.00 & $\pm$ 20.27 \\
+2& 1 & 976.00 & $\pm$ 20.27 \\
 & 2 & 993.00 & $\pm$ 20.12 \\
 \hline
-2 & 1 & 976.00 & $\pm$ 8.89 \\
+3 & 1 & 976.00 & $\pm$ 8.89 \\
 & 2 & 979.00 & $\pm$ 33.21 \\
 \hline
-1 & 1 & 0.00 & $\pm$ 0.00 \\
+4 & 1 & 0.00 & $\pm$ 0.00 \\
 & 2 & 983.00 & $\pm$ 15.59 \\
 \hline
 \end{tabular}
@@ -179,10 +188,11 @@ x   y           error    label
 {\em  Description  }}
 \end{center}
 \end{table}
-
 %--------------------------------------------%
 
 \subsubsection{Balance Between Working Set Least Recently Used}
+The first two experiments imply that Linux implements neither a MRU nor a FIFO page replacement algorithm.  
+
 %--------------------------------------------%
 \begin{figure}[h]
 \begin{tikzpicture}
@@ -239,10 +249,10 @@ x   y           error    label
 1 & 1 & 3614.00 & $\pm$ 131.24 \\
 & 2 & 5142.00 & $\pm$ 320.20 \\
 \hline
-1& 1 & 1.00 & $\pm$ 1.00 \\
+2& 1 & 1.00 & $\pm$ 1.00 \\
 & 2 & 1.00 & $\pm$ 0.00 \\
 \hline
-2 & 1 & 3990.00 & $\pm$ 24.58 \\
+3 & 1 & 3990.00 & $\pm$ 24.58 \\
 & 2 & 2163.00 & $\pm$ 13.96 \\
 \hline
 \end{tabular}
