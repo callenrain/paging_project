@@ -35,7 +35,9 @@ and the included flags in a header file.  If the user enters a pid of -1, we use
 \section{Methodology}
 \subsection{Experiments}
 
-We carried out four experiments, all contained 
+We carried out four experiments, all contained as subroutines within one file ({\tt mem.c}). The program selects one of the subroutines from a command line argument. In every test, the Virtual Machine was configured to have $256$MB of physical memory and $128$ buckets of unsigned ints (4B) were allocated. Thus each bucket had 4MB of data contained with it. Depending on the availability of memory after the boot, the system could hold slightly less than 64 of these buckets. We used this fact to plan some of our tests. 
+
+Each test (except the random LRU test) involves two cases. In either case for a specific test, the system does roughly the same allocation routine with a slightly different final phase. In these last phases, we attempted to exploit some characteristic of the page replacement algorithm. In one case, we would access memory that we predicted would be replaced by the algorithm, and in the other case, we would access memory that we guessed had not been replaced. By printing out major fault statistics between the phases, we could get an idea of whether our hypothesis was correct or not by calculating the average page faults for each phase.  We report this average over the number of trials and include the standard deviation as a measure of the error. 
 
 \subsubsection{Ruling Out Most Recently Used}
 %--------------------------------------------%
