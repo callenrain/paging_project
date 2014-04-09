@@ -23,12 +23,14 @@ This paper describes some of the techniques used to identify the behavior of the
 
 \section{Introduction}
 
-We began 
+We began with a hypothesis that the Linux system uses a Least Recently Used (LRU) page replacement algorithm, based on our analysis of the relevant kernel code and our numerous attempts in class to approximate this algorithm.  Our first few tests confirmed that the replacement policy is more like LRU than like Most Recently Used (MRU) or First In First Out (FIFO), but our test to find some distinction between LRU and a Working Set (WS) algorithm did lean in favor of some Working Set behavior rather than strict LRU. 
 
- Describe at a high-level what you are doing and why, and describe what your high-level hypothesis is (i.e. "We started out guessing that Linux's page replacement policy is X, but our experiments will show that it is in fact, more like Y" or "we start out making no assumptions about Linux's page replacement policy, and our experiments will answer the question of is it more like X, Y or Z.").
 
 \section{System Call}
-Short paragraph describing how you implemented your system call to get get per-process, per-owner, and system wide page fault counts? Also, describe other Unix utilities you used to collect performance data for your experiments.
+Our experimental methodology relies heavily on the page fault statistics system call that we implemented for the first part of this lab. The system call reports the number of page faults for all processes in the system, all the processes being run by the owner of the current process, or just the page faults for the current process. For each of these operations, the system call reports the major faults, minor faults, and the number of processes being reported on. We collected statistics primarily on major faults, as they are the page faults that result from having to replace pages in memory. 
+
+The system call first does all the normal error checking, ensuring that the pointer passed in is writable and valid, that the process or processes requested exist, and that the flag is valid. We defined the ${\tt pf\_info\_struct()}$ 
+and the included flags in a header file.  If the user enters a pid of -1, we used the ${\tt for\_each\_process()}$ macro to loop over all the processes, incrementing the major faults, minor faults, and number of processes for each one. We then fill the fields of the included struct. If the pid is positive, we check the inputted flag. If the flag is ${\tt PGFLTSTAT\_PROC}$, we do the same procedure for just the current process. If the flag is ${\tt PGFLTSTAT\_OWNER}$, we look for the owner id of the current process, and loop through all the processes again, collecting data only for the ones that share the uid. 
 
 \section{Methodology}
 \subsection{Experiments}
