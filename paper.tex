@@ -265,6 +265,57 @@ x   y           error    label
 
 \subsubsection{Random LRU Behavior}
 
+%--------------------------------------------%
+\begin{figure}[h]
+\begin{tikzpicture}
+\begin{axis}[
+    title = {Random vs. Sequential Access},
+    width=8cm,
+    xtick={1, 2},
+    xticklabels={1, 2},
+    grid=major,
+    ybar, 
+    bar width=10pt, 
+    ylabel=Page Faults, 
+    xlabel=Case, 
+    ymin=0, 
+    enlarge x limits={abs=1}
+    ]
+
+\addplot[
+    fill=red!25,
+    error bars/.cd,
+        y dir=both,
+        y explicit
+] 
+table [y error=error] {
+x   y           error    label
+1   9862.00   220.40 1
+2   4789.00   713.83 2
+};
+\end{axis}
+\end{tikzpicture}
+\end{figure}
+
+\begin{table}[h]
+\begin{center}
+\begin{tabular}{|c|c|r|r|}
+\hline
+{\bf Phase } & {\bf Case} & {\bf Page Faults} & {\bf Error } \\
+\hline
+1 & 1 & 9862.00 & $\pm$ 220.40 \\
+& 2 & 4789.00 & $\pm$ 713.83 \\
+
+\hline
+\end{tabular}
+\caption{ \label{rawio} Working Set versus LRU test data
+{\em  Description  }}
+\end{center}
+\end{table}
+
+%--------------------------------------------%
+
+
 Main part: describe your experiments and results: For each experiment, you should:
 
 Clearly state what your hypothesis is (i.e. "Application that does X should be a bad/good case for Linux's page replacement policy because ...)
